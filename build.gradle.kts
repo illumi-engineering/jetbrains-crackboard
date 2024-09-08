@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "sh.illumi.labs"
-version = "1.0-SNAPSHOT"
+version = "0.1.0"
 
 repositories {
     mavenCentral()
@@ -17,7 +17,7 @@ intellij {
     version.set("2023.2.6")
     type.set("IC") // Target IDE Platform
 
-    plugins.set(listOf(/* Plugin Dependencies */))
+//    plugins.set(listOf(/* Plugin Dependencies */))
 }
 
 tasks {
@@ -36,12 +36,12 @@ tasks {
     }
 
     signPlugin {
-        certificateChain.set(System.getenv("CERTIFICATE_CHAIN"))
-        privateKey.set(System.getenv("PRIVATE_KEY"))
-        password.set(System.getenv("PRIVATE_KEY_PASSWORD"))
+        certificateChainFile.set(file("certs/chain.crt"))
+        privateKeyFile.set(file("certs/private.pem"))
+        password.set(providers.environmentVariable("PRIVATE_KEY_PASSWORD"))
     }
 
     publishPlugin {
-        token.set(System.getenv("PUBLISH_TOKEN"))
+        token.set(providers.environmentVariable("PUBLISH_TOKEN"))
     }
 }

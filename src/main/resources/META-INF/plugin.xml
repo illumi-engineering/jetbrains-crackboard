@@ -24,6 +24,10 @@
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-        <typedHandler implementation="sh.illumi.labs.crackboardidea.TypingListener" />
+        <typedHandler implementation="sh.illumi.labs.jetbrains_crackboard.listeners.TypingListener" />
     </extensions>
+    <actions>
+        <action id="sh.illumi.labs.jetbrains-crackboard.actions.SetSessionKeyAction"
+                class="sh.illumi.labs.jetbrains_crackboard.actions.SetSessionKeyAction" text="Set CrackBoard Session Key"/>
+    </actions>
 </idea-plugin>

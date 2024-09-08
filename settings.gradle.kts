@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "CrackboardIdea"
+rootProject.name = "jetbrains-crackboard"

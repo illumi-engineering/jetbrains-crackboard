@@ -1,8 +1,9 @@
-package sh.illumi.labs.crackboardidea
+package sh.illumi.labs.jetbrains_crackboard.ui
 
 import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import sh.illumi.labs.jetbrains_crackboard.CrackBoardSettings
 import java.awt.Color
 import java.awt.Desktop
 import java.awt.GridLayout
@@ -12,7 +13,7 @@ import javax.swing.*
 import javax.swing.event.HyperlinkEvent
 import javax.swing.event.HyperlinkListener
 
-class ApiKey : DialogWrapper(true) {
+class SessionKeyDialog : DialogWrapper(true) {
     private val panel: JPanel
     private val label: JLabel
     private val input: JTextField
@@ -46,32 +47,32 @@ class ApiKey : DialogWrapper(true) {
         this.show()
         return input.text
     }
-}
 
-internal class LinkPane(private val url: String) : JTextPane() {
-    init {
-        this.isEditable = false
-        this.addHyperlinkListener(UrlHyperlinkListener())
-        this.contentType = "text/html"
-        this.background = Color(0, 0, 0, 0)
-        this.text = url
-    }
+    internal class LinkPane(private val url: String) : JTextPane() {
+        init {
+            this.isEditable = false
+            this.addHyperlinkListener(UrlHyperlinkListener())
+            this.contentType = "text/html"
+            this.background = Color(0, 0, 0, 0)
+            this.text = url
+        }
 
-    private class UrlHyperlinkListener : HyperlinkListener {
-        override fun hyperlinkUpdate(event: HyperlinkEvent) {
-            if (event.eventType == HyperlinkEvent.EventType.ACTIVATED) {
-                try {
-                    Desktop.getDesktop().browse(event.url.toURI())
-                } catch (e: IOException) {
-                    throw RuntimeException("Can't open URL", e)
-                } catch (e: URISyntaxException) {
-                    throw RuntimeException("Can't open URL", e)
+        private class UrlHyperlinkListener : HyperlinkListener {
+            override fun hyperlinkUpdate(event: HyperlinkEvent) {
+                if (event.eventType == HyperlinkEvent.EventType.ACTIVATED) {
+                    try {
+                        Desktop.getDesktop().browse(event.url.toURI())
+                    } catch (e: IOException) {
+                        throw RuntimeException("Can't open URL", e)
+                    } catch (e: URISyntaxException) {
+                        throw RuntimeException("Can't open URL", e)
+                    }
                 }
             }
         }
-    }
 
-    override fun setText(text: String) {
-        super.setText("<html><body style=\"text-align:center;\"><a href=\"$url\">$text</a></body></html>")
+        override fun setText(text: String) {
+            super.setText("<html><body style=\"text-align:center;\"><a href=\"$url\">$text</a></body></html>")
+        }
     }
 }
