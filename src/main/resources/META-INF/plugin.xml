@@ -25,6 +25,7 @@
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <typedHandler implementation="sh.illumi.labs.jetbrains_crackboard.listeners.TypingListener" />
+        <postStartupActivity implementation="sh.illumi.labs.jetbrains_crackboard.CrackBoardStartupActivity" />
     </extensions>
     <actions>
         <action id="sh.illumi.labs.jetbrains-crackboard.actions.SetSessionKeyAction"

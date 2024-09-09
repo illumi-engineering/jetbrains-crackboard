@@ -44,7 +44,7 @@ class SessionKeyDialog : DialogWrapper(true) {
 
     fun promptForApiKey(): String {
         input.text = service<CrackBoardSettings>().state.sessionKey
-        this.show()
+        if (!this.isVisible) this.show()
         return input.text
     }
 

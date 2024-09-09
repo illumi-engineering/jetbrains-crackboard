@@ -25,7 +25,6 @@ import java.net.URI
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.toKotlinDuration
@@ -136,11 +135,15 @@ class CrackBoard : Disposable {
 
     private fun getDurationFromLastHeartbeat(time: LocalDateTime = LocalDateTime.now()) = java.time.Duration.between(statusBarHeartbeat ?: time, time).toKotlinDuration()
 
-    private val sessionKey get() =
-        service<CrackBoardSettings>().state.sessionKey ?: run {
-            service<CrackBoardSettings>().state.sessionKey = SessionKeyDialog().promptForApiKey()
-            service<CrackBoardSettings>().state.sessionKey!!
+    private val sessionKey get() = service<CrackBoardSettings>().state.sessionKey
+
+    fun checkApiKey() {
+        ApplicationManager.getApplication().invokeLater {
+            if (sessionKey == null) {
+                SessionKeyDialog().promptForApiKey()
+            }
         }
+    }
 
     companion object {
         val HEARTBEAT_INTERVAL = 2.minutes
