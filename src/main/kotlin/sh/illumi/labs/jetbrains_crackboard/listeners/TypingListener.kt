@@ -8,9 +8,8 @@ import com.intellij.psi.PsiFile
 import sh.illumi.labs.jetbrains_crackboard.CrackBoard
 
 class TypingListener : TypedHandlerDelegate() {
-    private val crackBoard = service<CrackBoard>()
-
     override fun charTyped(c: Char, project: Project, editor: Editor, file: PsiFile): Result {
+        val crackBoard = project.service<CrackBoard>()
         if (crackBoard.isAppActive) crackBoard.sendHeartbeat(file.virtualFile)
         return super.charTyped(c, project, editor, file)
     }

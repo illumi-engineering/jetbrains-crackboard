@@ -2,13 +2,26 @@ plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.24"
     id("org.jetbrains.intellij") version "1.17.3"
+    kotlin("plugin.serialization") version "1.9.24"
 }
 
 group = "sh.illumi.labs"
 version = "0.1.3"
 
+val ktorVersion: String by project
+
 repositories {
     mavenCentral()
+}
+
+dependencies {
+    implementation("io.ktor:ktor-client-core:$ktorVersion") {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+    }
+    implementation("io.ktor:ktor-client-java:$ktorVersion") {
+        exclude(group = "org.jetbrains.kotlinx", module = "kotlinx-coroutines-core")
+    }
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 }
 
 // Configure Gradle IntelliJ Plugin

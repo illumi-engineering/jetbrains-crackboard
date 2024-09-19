@@ -14,93 +14,94 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.wm.WindowManager
-import kotlinx.datetime.toKotlinInstant
+import com.intellij.util.progress.sleepCancellable
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.java.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.datetime.*
 import sh.illumi.labs.jetbrains_crackboard.listeners.*
+import sh.illumi.labs.jetbrains_crackboard.objects.Heartbeat
+import sh.illumi.labs.jetbrains_crackboard.objects.MeStats
 import sh.illumi.labs.jetbrains_crackboard.ui.SessionKeyDialog
 import java.awt.KeyboardFocusManager
-import java.io.BufferedWriter
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
-import java.net.URI
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.Duration.Companion.seconds
-import kotlin.time.toKotlinDuration
 
-@Service
-class CrackBoard : Disposable {
+@Service(Service.Level.PROJECT)
+class CrackBoard(
+    private val project: Project,
+    private val cs: CoroutineScope
+) {
     private val log = logger<CrackBoard>()
-    private var lastHeartbeatTime: LocalDateTime? = null
-    private var currentLanguage: String? = null
-    private var statusBarHeartbeat: LocalDateTime? = null
-    private var lastStatusBarUpdate: LocalDateTime? = null
+    private var lastHeartbeatTime: Instant? = null
+    private var currentStats: MeStats? = null
+
+    private val client = HttpClient(Java) {
+        engine {
+            threadsCount = 8
+            pipelining = true
+            protocolVersion = java.net.http.HttpClient.Version.HTTP_2
+        }
+
+        install(ContentNegotiation) {
+            json()
+        }
+    }
 
     init {
         setupStatusBar()
         setupEventListeners()
     }
 
-    fun sendHeartbeat(file: VirtualFile) {
-        val now = LocalDateTime.now()
-
-        // only update statusbar every 15 seconds
-        if (lastStatusBarUpdate == null || (now.toInstant(ZoneOffset.UTC).toKotlinInstant() - lastStatusBarUpdate!!.toInstant(ZoneOffset.UTC).toKotlinInstant()) >= STATUSBAR_UPDATE_INTERVAL) {
-            statusBarHeartbeat = now
-            lastStatusBarUpdate = now
-            currentLanguage = file.fileType.name
-        }
-
-        // ensure to only send a heartbeat once per interval
-        if (lastHeartbeatTime == null || (now.toInstant(ZoneOffset.UTC).toKotlinInstant() - lastHeartbeatTime!!.toInstant(ZoneOffset.UTC).toKotlinInstant()) >= HEARTBEAT_INTERVAL) {
-            val jsonData = """
-                {
-                    "session_key": "$sessionKey",
-                    "timestamp": "${DateTimeFormatter.ISO_DATE_TIME.format(now)}",
-                    "language_name": "${file.fileType.name}"
-                }
-            """.trimIndent()
-
-            try {
-                // URL of the API endpoint
-                val url = URI("${service<CrackBoardSettings>().state.baseUrl}/heartbeat").toURL()
-                // Open connection
-                val conn = url.openConnection() as HttpURLConnection
-                conn.requestMethod = "POST"
-                conn.doOutput = true
-                conn.setRequestProperty("Content-Type", "application/json")
-
-                // Write JSON data to the request body
-                conn.outputStream.use { os ->
-                    val writer = BufferedWriter(OutputStreamWriter(os, "UTF-8"))
-                    writer.write(jsonData)
-                    writer.flush()
-                }
-
-                // Get the response code
-                val responseCode = conn.responseCode
-
-                if (responseCode == 429) log.warn("Rate-limited")
-
-                // Read the response
-                val response = conn.inputStream.bufferedReader().use { it.readText() }
-
-                log.debug("Response Code: $responseCode")
-                log.debug("Response: $response")
-
-                log.info("Heartbeat sent successfully.")
-
-                lastHeartbeatTime = now
-            } catch (e: Exception) {
-                log.warn("Failed to send heartbeat", e)
+    fun getMeStats() = cs.launch {
+        val settings = service<CrackBoardSettings>().state
+        currentStats = client.get("${settings.baseUrl}/api/user/me") {
+            headers {
+                append("SessionKey", service<CrackBoardSettings>().state.sessionKey!!)
             }
-        }
+        }.body()
     }
 
-    fun getStatusBarText(): String {
-        val duration = getDurationFromLastHeartbeat()
-        return "${currentLanguage ?: "none"}: $duration"
+    val statusBarDisplay
+        get() = currentStats?.let { "${it.twitter_handle}: #${it.position} - ${it.total_minutes.minutes}" }
+            ?: "CrackBoard Uninitialized"
+
+    fun sendHeartbeat(file: VirtualFile) {
+        cs.launch {
+            val settings = service<CrackBoardSettings>().state
+            sleepCancellable(2.minutes.inWholeMilliseconds)
+
+            val now = Clock.System.now()
+
+            // ensure to only send a heartbeat once per interval
+            if (lastHeartbeatTime == null || (now - lastHeartbeatTime!!) >= HEARTBEAT_INTERVAL) {
+                try {
+                    val resp = client.post("${settings.baseUrl}/heartbeat") {
+                        setBody(
+                            Heartbeat.create(
+                                file.fileType.name,
+                                now.toLocalDateTime(TimeZone.currentSystemDefault())
+                            )
+                        )
+                    }
+
+                    if (!resp.status.isSuccess()) {
+                        // Only throw if we're not being rate limited
+                        if (resp.status != HttpStatusCode.TooManyRequests) throw Exception("Failed to send heartbeat: ${resp.status}")
+                    }
+                    log.info("Heartbeat sent successfully.")
+
+                    lastHeartbeatTime = now
+                } catch (e: Exception) {
+                    log.warn("Failed to send heartbeat", e)
+                }
+            }
+        }
     }
 
     val isAppActive get() = KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow != null
@@ -121,7 +122,7 @@ class CrackBoard : Disposable {
             EditorFactory.getInstance().eventMulticaster.addEditorMouseListener(MouseEventListener(), disposable)
             EditorFactory.getInstance().eventMulticaster.addVisibleAreaListener(VisibilityListener(), disposable)
 
-            Disposer.register(this, disposable)
+            Disposer.register(CrackBoardDisposable.instance, disposable)
         }
     }
 
@@ -132,8 +133,6 @@ class CrackBoard : Disposable {
     }
 
     private val currentProject get() = ProjectManager.getInstance().defaultProject
-
-    private fun getDurationFromLastHeartbeat(time: LocalDateTime = LocalDateTime.now()) = java.time.Duration.between(statusBarHeartbeat ?: time, time).toKotlinDuration()
 
     private val sessionKey get() = service<CrackBoardSettings>().state.sessionKey
 
@@ -147,10 +146,5 @@ class CrackBoard : Disposable {
 
     companion object {
         val HEARTBEAT_INTERVAL = 2.minutes
-        val STATUSBAR_UPDATE_INTERVAL = 15.seconds
-    }
-
-    override fun dispose() {
-        log.info("Disposing CrackBoard")
     }
 }
